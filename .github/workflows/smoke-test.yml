@@ -1,0 +1,61 @@
+name: Smoke Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-secrets:
+    name: scan-secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run QWED secret scan
+        id: scan
+        uses: ./
+        with:
+          action: scan-secrets
+          paths: "action.yml,.github/**"
+          fail_on_findings: "false"
+      - name: Verify output
+        run: |
+          test -n "${{ steps.scan.outputs.verified }}" && echo "output ok"
+
+  test-code:
+    name: scan-code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run QWED code scan
+        uses: ./
+        with:
+          action: scan-code
+          paths: "**/*.yml"
+          fail_on_findings: "false"
+
+  test-shell:
+    name: verify-shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run QWED shell verify
+        uses: ./
+        with:
+          action: verify-shell
+          paths: "**/*.sh"
+          fail_on_findings: "false"
+
+  test-verify:
+    name: verify math
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run QWED math verify
+        uses: ./
+        with:
+          action: verify
+          engine: math
+          query: "Integral of x^2"
+          llm_output: "x^3/3"
+          fail_on_findings: "false"

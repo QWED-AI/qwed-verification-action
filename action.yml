@@ -1,0 +1,90 @@
+name: 'QWED Verification'
+description: 'Deterministic witness for your CI pipeline. Verify LLM outputs with Z3/SymPy. Scan secrets, code, and shell scripts. SARIF output for GitHub Security.'
+author: 'QWED-AI'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  action:
+    description: 'Action type: verify, scan-secrets, scan-code, verify-shell, verify-process'
+    required: false
+    default: 'verify'
+
+  engine:
+    description: 'Verification engine for verify mode: math, logic, code, sql, shell'
+    required: false
+    default: 'math'
+
+  query:
+    description: 'The original user query (e.g. "Derivative of x^2") - used with action=verify'
+    required: false
+
+  llm_output:
+    description: 'The output being cross-examined - used with action=verify'
+    required: false
+
+  paths:
+    description: 'Glob patterns for files to scan (e.g. "**/*.py,**/*.env")'
+    required: false
+    default: '.'
+
+  output_format:
+    description: 'Output format: text, json, sarif'
+    required: false
+    default: 'text'
+
+  fail_on_findings:
+    description: 'Fail the build on any finding'
+    required: false
+    default: 'true'
+
+  api_key:
+    description: 'QWED API key (optional - local mode requires nothing)'
+    required: false
+
+  provider:
+    description: 'LLM provider (e.g. openai, anthropic)'
+    required: false
+
+  model:
+    description: 'Model name'
+    required: false
+
+  mask_pii:
+    description: 'Redact PII in inputs and outputs'
+    required: false
+    default: 'false'
+
+  milestones:
+    description: 'Required milestones for verify-process mode (comma-separated)'
+    required: false
+
+outputs:
+  verified:
+    description: 'True if the claim held / no issues found'
+  explanation:
+    description: 'The proof, or the reason it did not hold'
+  findings_count:
+    description: 'Number of issues found'
+  badge_url:
+    description: 'URL for the QWED verified badge'
+  sarif_file:
+    description: 'Path to the SARIF report (if output_format=sarif)'
+
+runs:
+  using: 'docker'
+  image: 'docker://qwedai/qwed-verification:latest'
+  env:
+    INPUT_API_KEY: ${{ inputs.api_key }}
+    INPUT_ACTION: ${{ inputs.action }}
+    INPUT_ENGINE: ${{ inputs.engine }}
+    INPUT_QUERY: ${{ inputs.query }}
+    INPUT_LLM_OUTPUT: ${{ inputs.llm_output }}
+    INPUT_PATHS: ${{ inputs.paths }}
+    INPUT_OUTPUT_FORMAT: ${{ inputs.output_format }}
+    INPUT_FAIL_ON_FINDINGS: ${{ inputs.fail_on_findings }}
+    INPUT_PROVIDER: ${{ inputs.provider }}
+    INPUT_MODEL: ${{ inputs.model }}
+    INPUT_MASK_PII: ${{ inputs.mask_pii }}
+    INPUT_MILESTONES: ${{ inputs.milestones }}
