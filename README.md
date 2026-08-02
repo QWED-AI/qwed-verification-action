@@ -1,5 +1,6 @@
 <div align="center">
 
+  <img src="logo.png" alt="QWED Logo - AI Verification Engine" width="80" height="80">
   <h1>QWED Verification</h1>
   <h3>GitHub Action — a deterministic witness for your CI pipeline</h3>
 
@@ -101,7 +102,7 @@ A linter tells you your code doesn't match the style guide. QWED tells you your 
     paths: "**/*.sh"
 ```
 
-**LLM output verification**
+**LLM output verification** (requires a QWED backend — see note below)
 ```yaml
 - uses: QWED-AI/qwed-verification-action@v1
   with:
@@ -109,10 +110,13 @@ A linter tells you your code doesn't match the style guide. QWED tells you your 
     engine: math
     query: "Integral of x^2"
     llm_output: "x^3/3"
+    api_key: ${{ secrets.QWED_API_KEY }}   # optional in local mode
 ```
 ```
 Result: REJECTED — the integral of x² is x³/3 + C, proven by SymPy, cited in the ruling.
 ```
+
+> **Note on `verify` mode:** secret scanning, code scanning, and shell verification run **entirely inside the runner** — no backend needed. The `verify` mode (LLM output cross-examination) calls the QWED verification API; pass an `api_key` (or run a QWED backend locally) for that mode.
 
 ---
 

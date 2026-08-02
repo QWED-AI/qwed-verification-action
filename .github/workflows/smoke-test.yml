@@ -46,9 +46,12 @@ jobs:
           paths: "**/*.sh"
           fail_on_findings: "false"
 
+  # verify mode calls the QWED backend API, so it needs a QWED API key.
+  # Run it only when the key is configured in this repo's secrets.
   test-verify:
-    name: verify math
+    name: verify math (needs QWED_API_KEY secret)
     runs-on: ubuntu-latest
+    if: ${{ secrets.QWED_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Run QWED math verify
@@ -58,4 +61,5 @@ jobs:
           engine: math
           query: "Integral of x^2"
           llm_output: "x^3/3"
+          api_key: ${{ secrets.QWED_API_KEY }}
           fail_on_findings: "false"
