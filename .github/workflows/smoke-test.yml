@@ -51,10 +51,10 @@ jobs:
   test-verify:
     name: verify math (needs QWED_API_KEY secret)
     runs-on: ubuntu-latest
-    if: ${{ secrets.QWED_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Run QWED math verify
+        if: ${{ secrets.QWED_API_KEY != '' }}
         uses: ./
         with:
           action: verify
