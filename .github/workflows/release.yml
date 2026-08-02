@@ -28,6 +28,8 @@ jobs:
           echo "major=${MAJOR}" >> "$GITHUB_OUTPUT"
 
       - name: Move major tag (e.g. v1 -> v1.x.y)
+        env:
+          MAJOR: ${{ steps.version.outputs.major }}
         run: |
           git tag -f "${MAJOR}" "${GITHUB_SHA}"
           git push origin "${MAJOR}" --force
