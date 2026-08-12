@@ -29,15 +29,16 @@ jobs:
           VERDICT: ${{ steps.scan.outputs.verdict }}
           ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "$VERIFIED" && echo "verified output ok"
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
           if [ -n "$VERDICT" ]; then
             echo "verdict: $VERDICT"
             case "$VERDICT" in
               VERIFIED|UNVERIFIABLE|BLOCKED) ;;
               *) echo "Invalid verdict: $VERDICT" >&2; exit 1 ;;
             esac
-          else
-            echo "verdict not yet emitted by image (backward-compatible)"
           fi
           if [ -n "$ADMISSION" ]; then
             echo "admission: $ADMISSION"
@@ -49,9 +50,10 @@ jobs:
               if [ "$VERDICT" = "UNVERIFIABLE" ] || [ "$VERDICT" = "BLOCKED" ]; then
                 [ "$ADMISSION" = "DENY" ] || { echo "Fail-closed violation: $VERDICT must produce DENY" >&2; exit 1; }
               fi
+              if [ "$VERDICT" = "VERIFIED" ] && [ "$ADMISSION" = "ADMIT" ]; then
+                [ "$VERIFIED" = "true" ] || { echo "Consistency violation: VERIFIED+ADMIT must have verified=true" >&2; exit 1; }
+              fi
             fi
-          else
-            echo "admission not yet emitted by image (backward-compatible)"
           fi
 
   test-code:
@@ -74,7 +76,10 @@ jobs:
           VERDICT: ${{ steps.scan.outputs.verdict }}
           ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "$VERIFIED" && echo "verified output ok"
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
           if [ -n "$VERDICT" ]; then echo "verdict: $VERDICT"; fi
           if [ -n "$ADMISSION" ]; then echo "admission: $ADMISSION"; fi
 
@@ -98,7 +103,10 @@ jobs:
           VERDICT: ${{ steps.scan.outputs.verdict }}
           ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "$VERIFIED" && echo "verified output ok"
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
           if [ -n "$VERDICT" ]; then echo "verdict: $VERDICT"; fi
           if [ -n "$ADMISSION" ]; then echo "admission: $ADMISSION"; fi
 
@@ -123,17 +131,50 @@ jobs:
           VERDICT: ${{ steps.scan.outputs.verdict }}
           ADMISSION: ${{ steps.scan.outputs.admission }}
           VERIFIED: ${{ steps.scan.outputs.verified }}
+          PROOF_REF: ${{ steps.scan.outputs.proof_ref }}
         run: |
-          test -n "$VERIFIED" && echo "verified output ok"
-          if [ -n "$VERIFICATION_CONTEXT" ]; then
-            echo "VC document emitted"
-            printf '%s' "$VERIFICATION_CONTEXT" | jq -e . >/dev/null
-            printf '%s' "$VERIFICATION_CONTEXT" | jq -e '.spec_version == "1.0"' >/dev/null
-            printf '%s' "$VERIFICATION_CONTEXT" | jq -e '.verdict' >/dev/null
-            printf '%s' "$VERIFICATION_CONTEXT" | jq -e '.context.decision.admission' >/dev/null
-            echo "VC document validated against v1.0 contract"
-          else
-            echo "VC document not yet emitted by image (backward-compatible — image needs VC v1.0 output support)"
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
+          if [ -z "$VERIFICATION_CONTEXT" ]; then
+            echo "verification_context not yet emitted by image — VC v1.0 output support requires Docker image update (tracked separately)"
+            echo "Skipping VC document validation (backward-compatible mode)"
+            exit 0
           fi
-          if [ -n "$VERDICT" ]; then echo "verdict: $VERDICT"; fi
-          if [ -n "$ADMISSION" ]; then echo "admission: $ADMISSION"; fi
+          echo "VC document emitted — validating full contract"
+          printf '%s' "$VERIFICATION_CONTEXT" | jq -e . >/dev/null
+          printf '%s' "$VERIFICATION_CONTEXT" | jq -e '.spec_version == "1.0"' >/dev/null
+          VC_VERDICT=$(printf '%s' "$VERIFICATION_CONTEXT" | jq -r '.verdict')
+          VC_ADMISSION=$(printf '%s' "$VERIFICATION_CONTEXT" | jq -r '.context.decision.admission')
+          VC_PROOF_REF=$(printf '%s' "$VERIFICATION_CONTEXT" | jq -r '.context.evidence.proof_ref // empty')
+          echo "VC verdict: $VC_VERDICT"
+          echo "VC admission: $VC_ADMISSION"
+          case "$VC_VERDICT" in
+            VERIFIED|UNVERIFIABLE|BLOCKED) ;;
+            *) echo "Invalid VC verdict: $VC_VERDICT" >&2; exit 1 ;;
+          esac
+          case "$VC_ADMISSION" in
+            ADMIT|DENY) ;;
+            *) echo "Invalid VC admission: $VC_ADMISSION" >&2; exit 1 ;;
+          esac
+          if [ "$VC_VERDICT" = "UNVERIFIABLE" ] || [ "$VC_VERDICT" = "BLOCKED" ]; then
+            [ "$VC_ADMISSION" = "DENY" ] || { echo "Fail-closed violation: $VC_VERDICT must have admission=DENY" >&2; exit 1; }
+          fi
+          if [ "$VC_VERDICT" = "VERIFIED" ]; then
+            [ -n "$VC_PROOF_REF" ] || { echo "VERIFIED must have proof_ref" >&2; exit 1; }
+            case "$VC_PROOF_REF" in
+              sha256:[a-f0-9]{64}) ;;
+              *) echo "Invalid proof_ref format: $VC_PROOF_REF" >&2; exit 1 ;;
+            esac
+          fi
+          if [ -n "$VERDICT" ]; then
+            [ "$VERDICT" = "$VC_VERDICT" ] || { echo "Scalar verdict ($VERDICT) != VC verdict ($VC_VERDICT)" >&2; exit 1; }
+          fi
+          if [ -n "$ADMISSION" ]; then
+            [ "$ADMISSION" = "$VC_ADMISSION" ] || { echo "Scalar admission ($ADMISSION) != VC admission ($VC_ADMISSION)" >&2; exit 1; }
+          fi
+          if [ -n "$PROOF_REF" ]; then
+            [ "$PROOF_REF" = "$VC_PROOF_REF" ] || { echo "Scalar proof_ref != VC proof_ref" >&2; exit 1; }
+          fi
+          echo "VC v1.0 contract validated — all checks passed"
