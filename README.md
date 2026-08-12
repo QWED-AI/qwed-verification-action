@@ -10,6 +10,7 @@
   [![Verified Publisher](https://img.shields.io/badge/Verified_Publisher-QWED-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/marketplace/actions/qwed-protocol-verification)
   [![Core Protocol](https://img.shields.io/badge/Core-QWED_Protocol-1a1a1a?style=flat)](https://github.com/QWED-AI/qwed-verification)
   [![License](https://img.shields.io/badge/License-Apache_2.0-1a1a1a?style=flat)](LICENSE)
+  [![Verification Context v1.0](https://img.shields.io/badge/Verification_Context-v1.0-2ea44f?style=flat)](https://github.com/QWED-AI/qwed-verification/blob/main/spec/v1.0/verification-context.md)
 
   <br>
 
@@ -17,6 +18,7 @@
   [What It Verifies](#what-it-verifies) ·
   [Modes](#verification-modes) ·
   [Inputs & Outputs](#inputs--outputs) ·
+  [Verification Context v1.0](#verification-context-v10) ·
   [Why a Deterministic Judge](#why-a-deterministic-judge) ·
   [Security](#security--privacy)
 
@@ -116,7 +118,38 @@ A linter tells you your code doesn't match the style guide. QWED tells you your 
 Result: REJECTED — the integral of x² is x³/3 + C, proven by SymPy, cited in the ruling.
 ```
 
-> **Note on `verify` mode:** secret scanning, code scanning, and shell verification run **entirely inside the runner** — no backend needed. The `verify` mode (LLM output cross-examination) calls the QWED verification API; pass an `api_key` (or run a QWED backend locally) for that mode.
+**Verification Context output** (emit VC v1.0 JSON)
+```yaml
+- uses: QWED-AI/qwed-verification-action@v1
+  with:
+    action: scan-code
+    paths: "**/*.py"
+    output_format: verification-context
+    fail_on_findings: "true"
+  # outputs: verdict, admission, proof_ref, verification_context
+```
+
+> **Note on `verify` mode:** secret scanning, code scanning, and shell verification run **entirely inside the runner** — no backend needed. The `verify` mode (LLM output cross-examination) calls the QWED verification API; pass an `api_key` (or run a QWED backend locally) for that mode. Self-hosted deployments can use the `api_url` input to point to their own backend.
+
+---
+
+## Verification Context v1.0
+
+Every QWED verification result is emitted as a [Verification Context v1.0](https://github.com/QWED-AI/qwed-verification/blob/main/spec/v1.0/verification-context.md) document — a machine-readable, schema-validated protocol with:
+
+| Output | Values | Meaning |
+|---|---|---|
+| `verdict` | `VERIFIED` · `UNVERIFIABLE` · `BLOCKED` | The truth judgment |
+| `admission` | `ADMIT` · `DENY` | Safe to merge? (truth ≠ admission) |
+| `proof_ref` | `sha256:<64-hex>` or empty | Cryptographic evidence commitment |
+| `verification_context` | JSON | Full VC v1.0 document (with `output_format: verification-context` or `json`) |
+| `verified` | `true` · `false` | Backward-compatible boolean (`true` only when `verdict=VERIFIED` and `admission=ADMIT`) |
+
+**Fail-closed guarantees:**
+- `UNVERIFIABLE` and `BLOCKED` always produce `admission: DENY`
+- `VERIFIED` requires a resolvable `proof_ref`
+- Schema validation failure fails closed
+- `fail_on_findings: "true"` gates on `admission == "ADMIT"`, not just a boolean
 
 ---
 
@@ -131,17 +164,22 @@ Result: REJECTED — the integral of x² is x³/3 + C, proven by SymPy, cited in
 | `query` | — | The original user query, e.g. *"Derivative of x²"* |
 | `llm_output` | — | The output being cross-examined |
 | `paths` | `.` | Glob patterns to scan, e.g. `**/*.py,**/*.env` |
-| `output_format` | `text` | `text` · `json` · `sarif` |
-| `fail_on_findings` | `true` | Fail the build on any finding |
+| `output_format` | `text` | `text` · `json` · `sarif` · `verification-context` |
+| `fail_on_findings` | `true` | Fail the build on any finding (admission != ADMIT) |
 | `api_key` | — | Optional — local mode requires nothing |
+| `api_url` | `https://api.qwedai.com` | QWED API base URL for self-hosted deployments |
 | `mask_pii` | `false` | Redact PII in inputs and outputs |
 
 **Outputs**
 
 | Output | Description |
 |---|---|
-| `verified` | `true` if the claim held |
-| `explanation` | The proof, or the reason it didn't |
+| `verdict` | `VERIFIED` · `UNVERIFIABLE` · `BLOCKED` (Verification Context v1.0) |
+| `admission` | `ADMIT` · `DENY` — gate execution/shipping on `admission == "ADMIT"` |
+| `proof_ref` | `sha256:<64-hex>` evidence commitment, or empty when not verified |
+| `verification_context` | Full VC v1.0 JSON document (when `output_format: verification-context` or `json`) |
+| `verified` | `true` if `verdict=VERIFIED` and `admission=ADMIT` (backward-compatible) |
+| `explanation` | The proof, or the reason it didn't hold |
 | `findings_count` | Number of issues found |
 | `sarif_file` | Path to the SARIF report |
 | `badge_url` | URL for your QWED verified badge |
@@ -154,9 +192,9 @@ Result: REJECTED — the integral of x² is x³/3 + C, proven by SymPy, cited in
 |---|---|---|
 | The judge | A deterministic solver (Z3 / SymPy) | Another model, or an embedding distance |
 | Verdict basis | Mathematical proof | Resemblance to a "good" answer |
-| Result | `VERIFIED` with a cryptographic `proof_ref` | "Looks fine" |
+| Result | `VERIFIED` with `verdict`, `admission`, and `proof_ref` | "Looks fine" |
 | Latency | Under 100ms for most checks | Variable |
-| Data handling | Never leaves the runner | Usually a round trip to the cloud |
+| Data handling | Never leaves the runner (except `verify` mode) | Usually a round trip to the cloud |
 
 QWED isn't in competition with the models it checks. It's what lets you ship them.
 
@@ -164,9 +202,9 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 
 ## Security & Privacy
 
-- **Nothing leaves the runner.** Code and secrets are evaluated inside your CI environment or VPC — no external call, no exception.
+- **Nothing leaves the runner.** Code and secrets are evaluated inside your CI environment or VPC — no external call, no exception. (`verify` mode is the only mode that calls the QWED API; use `api_url` for self-hosted backends.)
 - **Nothing is learned from.** QWED is a deterministic execution engine, not a model. There is no training loop for your data to enter.
-- **Every verdict is signed.** A passing result ships with a JWT attestation and a SHA-256 `proof_ref` binding the ruling to the evidence that produced it.
+- **Every verdict is signed.** A passing result ships with `verdict=VERIFIED`, `admission=ADMIT`, and a `proof_ref` binding the ruling to the evidence that produced it.
 - **SARIF native.** Findings land directly in the GitHub Security tab — no separate dashboard to check.
 
 ---
@@ -178,7 +216,7 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 - uses: QWED-AI/qwed-verification-action@v1.2.0  # pinned, reproducible
 ```
 
-The action's version tags are decoupled from the core protocol's release train — action fixes ship on their own cadence, and the underlying engine always runs from the latest published QWED image.
+The action's version tags are decoupled from the core protocol's release train — action fixes ship on their own cadence. The Docker image is pinned to a specific QWED version (`v7.0.0`) for reproducibility.
 
 ---
 
@@ -189,6 +227,8 @@ This action runs on the open-source **[QWED Protocol](https://github.com/QWED-AI
 | Resource | Link |
 |---|---|
 | Core repository | [QWED-AI/qwed-verification](https://github.com/QWED-AI/qwed-verification) |
+| Verification Context spec | [spec/v1.0/verification-context.md](https://github.com/QWED-AI/qwed-verification/blob/main/spec/v1.0/verification-context.md) |
+| QWED Security (GitHub App) | [QWED-AI/qwed-security](https://github.com/QWED-AI/qwed-security) |
 | Documentation | [docs.qwedai.com](https://docs.qwedai.com) |
 | Verification course | [QWED-AI/qwed-learning](https://github.com/QWED-AI/qwed-learning) |
 | Sponsor | [github.com/sponsors/QWED-AI](https://github.com/sponsors/QWED-AI) |

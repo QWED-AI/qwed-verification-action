@@ -18,9 +18,12 @@ jobs:
           action: scan-secrets
           paths: "action.yml,.github/**"
           fail_on_findings: "false"
-      - name: Verify output
+      - name: Verify VC v1.0 outputs
         run: |
-          test -n "${{ steps.scan.outputs.verified }}" && echo "output ok"
+          test -n "${{ steps.scan.outputs.verified }}" && echo "verified output ok"
+          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict output ok: ${{ steps.scan.outputs.verdict }}"
+          test -n "${{ steps.scan.outputs.admission }}" && echo "admission output ok: ${{ steps.scan.outputs.admission }}"
+          echo "proof_ref: ${{ steps.scan.outputs.proof_ref }}"
 
   test-code:
     name: scan-code
@@ -28,11 +31,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run QWED code scan
+        id: scan
         uses: ./
         with:
           action: scan-code
           paths: "**/*.yml"
           fail_on_findings: "false"
+      - name: Verify VC v1.0 outputs
+        run: |
+          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict: ${{ steps.scan.outputs.verdict }}"
+          test -n "${{ steps.scan.outputs.admission }}" && echo "admission: ${{ steps.scan.outputs.admission }}"
 
   test-shell:
     name: verify-shell
@@ -40,8 +48,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run QWED shell verify
+        id: scan
         uses: ./
         with:
           action: verify-shell
           paths: "**/*.sh"
           fail_on_findings: "false"
+      - name: Verify VC v1.0 outputs
+        run: |
+          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict: ${{ steps.scan.outputs.verdict }}"
+          test -n "${{ steps.scan.outputs.admission }}" && echo "admission: ${{ steps.scan.outputs.admission }}"
+
+  test-verification-context:
+    name: verification-context output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run with VC output format
+        id: scan
+        uses: ./
+        with:
+          action: scan-secrets
+          paths: "action.yml"
+          output_format: verification-context
+          fail_on_findings: "false"
+      - name: Verify VC document
+        run: |
+          test -n "${{ steps.scan.outputs.verification_context }}" && echo "VC document output ok"
+          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict: ${{ steps.scan.outputs.verdict }}"
+          test -n "${{ steps.scan.outputs.admission }}" && echo "admission: ${{ steps.scan.outputs.admission }}"

@@ -1,5 +1,5 @@
 name: 'QWED Verification'
-description: 'Deterministic witness for your CI pipeline. Verify LLM outputs with Z3/SymPy. Scan secrets, code, and shell scripts. SARIF output for GitHub Security.'
+description: 'Deterministic witness for your CI pipeline. Verify LLM outputs with Z3/SymPy. Scan secrets, code, and shell scripts. SARIF output for GitHub Security. Emits Verification Context v1.0 documents with verdict, admission, and proof_ref.'
 author: 'QWED-AI'
 branding:
   icon: 'shield'
@@ -30,18 +30,23 @@ inputs:
     default: '.'
 
   output_format:
-    description: 'Output format: text, json, sarif'
+    description: 'Output format: text, json, sarif, verification-context'
     required: false
     default: 'text'
 
   fail_on_findings:
-    description: 'Fail the build on any finding'
+    description: 'Fail the build on any finding (admission != ADMIT)'
     required: false
     default: 'true'
 
   api_key:
     description: 'QWED API key (optional - local mode requires nothing)'
     required: false
+
+  api_url:
+    description: 'QWED API base URL for self-hosted deployments (default: https://api.qwedai.com)'
+    required: false
+    default: 'https://api.qwedai.com'
 
   provider:
     description: 'LLM provider (e.g. openai, anthropic)'
@@ -62,7 +67,15 @@ inputs:
 
 outputs:
   verified:
-    description: 'True if the claim held / no issues found'
+    description: 'True if verdict=VERIFIED and admission=ADMIT (backward-compatible boolean)'
+  verdict:
+    description: 'Verification Context v1.0 verdict: VERIFIED, UNVERIFIABLE, or BLOCKED'
+  admission:
+    description: 'Admission decision: ADMIT or DENY. Gate execution/shipping on admission == ADMIT.'
+  proof_ref:
+    description: 'SHA-256 evidence commitment (sha256:<64-hex>) or empty when not verified'
+  verification_context:
+    description: 'Full Verification Context v1.0 JSON document (when output_format=verification-context or json)'
   explanation:
     description: 'The proof, or the reason it did not hold'
   findings_count:
@@ -74,9 +87,10 @@ outputs:
 
 runs:
   using: 'docker'
-  image: 'docker://qwedai/qwed-verification:latest'
+  image: 'docker://qwedai/qwed-verification:v7.0.0'
   env:
     INPUT_API_KEY: ${{ inputs.api_key }}
+    INPUT_API_URL: ${{ inputs.api_url }}
     INPUT_ACTION: ${{ inputs.action }}
     INPUT_ENGINE: ${{ inputs.engine }}
     INPUT_QUERY: ${{ inputs.query }}
