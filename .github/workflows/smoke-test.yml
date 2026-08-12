@@ -163,10 +163,9 @@ jobs:
           fi
           if [ "$VC_VERDICT" = "VERIFIED" ]; then
             [ -n "$VC_PROOF_REF" ] || { echo "VERIFIED must have proof_ref" >&2; exit 1; }
-            case "$VC_PROOF_REF" in
-              sha256:[a-f0-9]{64}) ;;
-              *) echo "Invalid proof_ref format: $VC_PROOF_REF" >&2; exit 1 ;;
-            esac
+            if [[ ! "$VC_PROOF_REF" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "Invalid proof_ref format: $VC_PROOF_REF" >&2; exit 1
+            fi
           fi
           if [ -n "$VERDICT" ]; then
             [ "$VERDICT" = "$VC_VERDICT" ] || { echo "Scalar verdict ($VERDICT) != VC verdict ($VC_VERDICT)" >&2; exit 1; }
