@@ -142,9 +142,9 @@ jobs:
             *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
           esac
           if [ -z "$VERIFICATION_CONTEXT" ]; then
-            echo "verification_context not yet emitted by image — VC v1.0 output support requires Docker image update (tracked separately)"
-            echo "Skipping VC document validation (backward-compatible mode)"
-            exit 0
+            echo "FAIL: verification_context is empty but output_format=verification-context was requested" >&2
+            echo "The Docker image does not yet support VC v1.0 outputs (tracked in #9)" >&2
+            exit 1
           fi
           echo "VC document emitted — validating full contract"
           printf '%s' "$VERIFICATION_CONTEXT" | jq -e . >/dev/null
