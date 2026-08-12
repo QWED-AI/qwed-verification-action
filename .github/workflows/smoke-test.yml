@@ -53,6 +53,10 @@ jobs:
               if [ "$VERDICT" = "VERIFIED" ] && [ "$ADMISSION" = "ADMIT" ]; then
                 [ "$VERIFIED" = "true" ] || { echo "Consistency violation: VERIFIED+ADMIT must have verified=true" >&2; exit 1; }
               fi
+              if [ "$VERIFIED" = "true" ]; then
+                [ "$VERDICT" = "VERIFIED" ] || { echo "Consistency violation: verified=true requires verdict=VERIFIED" >&2; exit 1; }
+                [ "$ADMISSION" = "ADMIT" ] || { echo "Consistency violation: verified=true requires admission=ADMIT" >&2; exit 1; }
+              fi
             fi
           fi
 
@@ -166,14 +170,17 @@ jobs:
             if [[ ! "$VC_PROOF_REF" =~ ^sha256:[a-f0-9]{64}$ ]]; then
               echo "Invalid proof_ref format: $VC_PROOF_REF" >&2; exit 1
             fi
+          else
+            [ -z "$VC_PROOF_REF" ] || { echo "$VC_VERDICT must have an empty proof_ref" >&2; exit 1; }
           fi
-          if [ -n "$VERDICT" ]; then
-            [ "$VERDICT" = "$VC_VERDICT" ] || { echo "Scalar verdict ($VERDICT) != VC verdict ($VC_VERDICT)" >&2; exit 1; }
+          EXPECTED_VERIFIED="false"
+          if [ "$VC_VERDICT" = "VERIFIED" ] && [ "$VC_ADMISSION" = "ADMIT" ]; then
+            EXPECTED_VERIFIED="true"
           fi
-          if [ -n "$ADMISSION" ]; then
-            [ "$ADMISSION" = "$VC_ADMISSION" ] || { echo "Scalar admission ($ADMISSION) != VC admission ($VC_ADMISSION)" >&2; exit 1; }
-          fi
-          if [ -n "$PROOF_REF" ]; then
-            [ "$PROOF_REF" = "$VC_PROOF_REF" ] || { echo "Scalar proof_ref != VC proof_ref" >&2; exit 1; }
-          fi
+          [ "$VERIFIED" = "$EXPECTED_VERIFIED" ] || { echo "Consistency violation: verified=$VERIFIED but expected $EXPECTED_VERIFIED for verdict=$VC_VERDICT admission=$VC_ADMISSION" >&2; exit 1; }
+          [ -n "$VERDICT" ] || { echo "Missing scalar verdict when VC is present" >&2; exit 1; }
+          [ -n "$ADMISSION" ] || { echo "Missing scalar admission when VC is present" >&2; exit 1; }
+          [ "$VERDICT" = "$VC_VERDICT" ] || { echo "Scalar verdict ($VERDICT) != VC verdict ($VC_VERDICT)" >&2; exit 1; }
+          [ "$ADMISSION" = "$VC_ADMISSION" ] || { echo "Scalar admission ($ADMISSION) != VC admission ($VC_ADMISSION)" >&2; exit 1; }
+          [ "$PROOF_REF" = "$VC_PROOF_REF" ] || { echo "Scalar proof_ref ($PROOF_REF) != VC proof_ref ($VC_PROOF_REF)" >&2; exit 1; }
           echo "VC v1.0 contract validated — all checks passed"
