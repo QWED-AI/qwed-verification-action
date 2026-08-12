@@ -73,7 +73,7 @@ outputs:
   admission:
     description: 'Admission decision: ADMIT or DENY. Gate execution/shipping on admission == ADMIT.'
   proof_ref:
-    description: 'SHA-256 evidence commitment (sha256:<64-hex>) or empty when not verified'
+    description: 'SHA-256 evidence commitment (sha256:<64-hex>). Required when verdict=VERIFIED, empty otherwise.'
   verification_context:
     description: 'Full Verification Context v1.0 JSON document (when output_format=verification-context or json)'
   explanation:
@@ -87,7 +87,7 @@ outputs:
 
 runs:
   using: 'docker'
-  image: 'docker://qwedai/qwed-verification:v7.0.0'
+  image: 'docker://qwedai/qwed-verification:latest'
   env:
     INPUT_API_KEY: ${{ inputs.api_key }}
     INPUT_API_URL: ${{ inputs.api_url }}

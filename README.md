@@ -204,7 +204,7 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 
 - **Nothing leaves the runner.** Code and secrets are evaluated inside your CI environment or VPC — no external call, no exception. (`verify` mode is the only mode that calls the QWED API; use `api_url` for self-hosted backends.)
 - **Nothing is learned from.** QWED is a deterministic execution engine, not a model. There is no training loop for your data to enter.
-- **Every verdict is signed.** A passing result ships with `verdict=VERIFIED`, `admission=ADMIT`, and a `proof_ref` binding the ruling to the evidence that produced it.
+- **Every passing result includes an evidence commitment.** A passing result ships with `verdict=VERIFIED`, `admission=ADMIT`, and a `proof_ref` binding the ruling to the evidence that produced it.
 - **SARIF native.** Findings land directly in the GitHub Security tab — no separate dashboard to check.
 
 ---
@@ -216,7 +216,7 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 - uses: QWED-AI/qwed-verification-action@v1.2.0  # pinned, reproducible
 ```
 
-The action's version tags are decoupled from the core protocol's release train — action fixes ship on their own cadence. The Docker image is pinned to a specific QWED version (`v7.0.0`) for reproducibility.
+The action's version tags are decoupled from the core protocol's release train — action fixes ship on their own cadence. The Docker image tracks the latest published QWED release; pin the action ref (`@v1.2.0`) for reproducible workflow runs.
 
 ---
 

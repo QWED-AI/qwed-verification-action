@@ -5,12 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test-secrets:
     name: scan-secrets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Run QWED secret scan
         id: scan
         uses: ./
@@ -19,17 +24,22 @@ jobs:
           paths: "action.yml,.github/**"
           fail_on_findings: "false"
       - name: Verify VC v1.0 outputs
+        env:
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "${{ steps.scan.outputs.verified }}" && echo "verified output ok"
-          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict output ok: ${{ steps.scan.outputs.verdict }}"
-          test -n "${{ steps.scan.outputs.admission }}" && echo "admission output ok: ${{ steps.scan.outputs.admission }}"
-          echo "proof_ref: ${{ steps.scan.outputs.proof_ref }}"
+          test -n "$VERIFIED" && echo "verified output ok"
+          test -n "$VERDICT" && echo "verdict: $VERDICT"
+          test -n "$ADMISSION" && echo "admission: $ADMISSION"
 
   test-code:
     name: scan-code
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Run QWED code scan
         id: scan
         uses: ./
@@ -38,15 +48,20 @@ jobs:
           paths: "**/*.yml"
           fail_on_findings: "false"
       - name: Verify VC v1.0 outputs
+        env:
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict: ${{ steps.scan.outputs.verdict }}"
-          test -n "${{ steps.scan.outputs.admission }}" && echo "admission: ${{ steps.scan.outputs.admission }}"
+          test -n "$VERDICT" && echo "verdict: $VERDICT"
+          test -n "$ADMISSION" && echo "admission: $ADMISSION"
 
   test-shell:
     name: verify-shell
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Run QWED shell verify
         id: scan
         uses: ./
@@ -55,15 +70,20 @@ jobs:
           paths: "**/*.sh"
           fail_on_findings: "false"
       - name: Verify VC v1.0 outputs
+        env:
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict: ${{ steps.scan.outputs.verdict }}"
-          test -n "${{ steps.scan.outputs.admission }}" && echo "admission: ${{ steps.scan.outputs.admission }}"
+          test -n "$VERDICT" && echo "verdict: $VERDICT"
+          test -n "$ADMISSION" && echo "admission: $ADMISSION"
 
   test-verification-context:
     name: verification-context output
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Run with VC output format
         id: scan
         uses: ./
@@ -73,7 +93,26 @@ jobs:
           output_format: verification-context
           fail_on_findings: "false"
       - name: Verify VC document
+        env:
+          VERIFICATION_CONTEXT: ${{ steps.scan.outputs.verification_context }}
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "${{ steps.scan.outputs.verification_context }}" && echo "VC document output ok"
-          test -n "${{ steps.scan.outputs.verdict }}" && echo "verdict: ${{ steps.scan.outputs.verdict }}"
-          test -n "${{ steps.scan.outputs.admission }}" && echo "admission: ${{ steps.scan.outputs.admission }}"
+          test -n "$VERIFICATION_CONTEXT"
+          printf '%s' "$VERIFICATION_CONTEXT" | jq -e . >/dev/null
+          test -n "$VERDICT" && echo "verdict: $VERDICT"
+          test -n "$ADMISSION" && echo "admission: $ADMISSION"
+          case "$VERDICT" in
+            VERIFIED|UNVERIFIABLE|BLOCKED) ;;
+            *) echo "Invalid verdict: $VERDICT" >&2; exit 1 ;;
+          esac
+          case "$ADMISSION" in
+            ADMIT|DENY) ;;
+            *) echo "Invalid admission: $ADMISSION" >&2; exit 1 ;;
+          esac
+          if [ "$VERDICT" = "UNVERIFIABLE" ] || [ "$VERDICT" = "BLOCKED" ]; then
+            if [ "$ADMISSION" != "DENY" ]; then
+              echo "Fail-closed violation: $VERDICT must produce DENY" >&2
+              exit 1
+            fi
+          fi
