@@ -5,12 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test-secrets:
     name: scan-secrets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Run QWED secret scan
         id: scan
         uses: ./
@@ -18,30 +23,164 @@ jobs:
           action: scan-secrets
           paths: "action.yml,.github/**"
           fail_on_findings: "false"
-      - name: Verify output
+      - name: Verify outputs
+        env:
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
         run: |
-          test -n "${{ steps.scan.outputs.verified }}" && echo "output ok"
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
+          if [ -n "$VERDICT" ]; then
+            echo "verdict: $VERDICT"
+            case "$VERDICT" in
+              VERIFIED|UNVERIFIABLE|BLOCKED) ;;
+              *) echo "Invalid verdict: $VERDICT" >&2; exit 1 ;;
+            esac
+          fi
+          if [ -n "$ADMISSION" ]; then
+            echo "admission: $ADMISSION"
+            case "$ADMISSION" in
+              ADMIT|DENY) ;;
+              *) echo "Invalid admission: $ADMISSION" >&2; exit 1 ;;
+            esac
+            if [ -n "$VERDICT" ]; then
+              if [ "$VERDICT" = "UNVERIFIABLE" ] || [ "$VERDICT" = "BLOCKED" ]; then
+                [ "$ADMISSION" = "DENY" ] || { echo "Fail-closed violation: $VERDICT must produce DENY" >&2; exit 1; }
+              fi
+              if [ "$VERDICT" = "VERIFIED" ] && [ "$ADMISSION" = "ADMIT" ]; then
+                [ "$VERIFIED" = "true" ] || { echo "Consistency violation: VERIFIED+ADMIT must have verified=true" >&2; exit 1; }
+              fi
+              if [ "$VERIFIED" = "true" ]; then
+                [ "$VERDICT" = "VERIFIED" ] || { echo "Consistency violation: verified=true requires verdict=VERIFIED" >&2; exit 1; }
+                [ "$ADMISSION" = "ADMIT" ] || { echo "Consistency violation: verified=true requires admission=ADMIT" >&2; exit 1; }
+              fi
+            fi
+          fi
 
   test-code:
     name: scan-code
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Run QWED code scan
+        id: scan
         uses: ./
         with:
           action: scan-code
           paths: "**/*.yml"
           fail_on_findings: "false"
+      - name: Verify outputs
+        env:
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
+        run: |
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
+          if [ -n "$VERDICT" ]; then echo "verdict: $VERDICT"; fi
+          if [ -n "$ADMISSION" ]; then echo "admission: $ADMISSION"; fi
 
   test-shell:
     name: verify-shell
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Run QWED shell verify
+        id: scan
         uses: ./
         with:
           action: verify-shell
           paths: "**/*.sh"
           fail_on_findings: "false"
+      - name: Verify outputs
+        env:
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
+        run: |
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
+          if [ -n "$VERDICT" ]; then echo "verdict: $VERDICT"; fi
+          if [ -n "$ADMISSION" ]; then echo "admission: $ADMISSION"; fi
+
+  test-verification-context:
+    name: verification-context output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run with VC output format
+        id: scan
+        uses: ./
+        with:
+          action: scan-secrets
+          paths: "action.yml"
+          output_format: verification-context
+          fail_on_findings: "false"
+      - name: Verify VC document
+        env:
+          VERIFICATION_CONTEXT: ${{ steps.scan.outputs.verification_context }}
+          VERDICT: ${{ steps.scan.outputs.verdict }}
+          ADMISSION: ${{ steps.scan.outputs.admission }}
+          VERIFIED: ${{ steps.scan.outputs.verified }}
+          PROOF_REF: ${{ steps.scan.outputs.proof_ref }}
+        run: |
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
+          if [ -z "$VERIFICATION_CONTEXT" ]; then
+            echo "FAIL: verification_context is empty but output_format=verification-context was requested" >&2
+            echo "The Docker image does not yet support VC v1.0 outputs (tracked in #9)" >&2
+            exit 1
+          fi
+          echo "VC document emitted — validating full contract"
+          printf '%s' "$VERIFICATION_CONTEXT" | jq -e . >/dev/null
+          printf '%s' "$VERIFICATION_CONTEXT" | jq -e '.spec_version == "1.0"' >/dev/null
+          VC_VERDICT=$(printf '%s' "$VERIFICATION_CONTEXT" | jq -r '.verdict')
+          VC_ADMISSION=$(printf '%s' "$VERIFICATION_CONTEXT" | jq -r '.context.decision.admission')
+          VC_PROOF_REF=$(printf '%s' "$VERIFICATION_CONTEXT" | jq -r '.context.evidence.proof_ref // empty')
+          echo "VC verdict: $VC_VERDICT"
+          echo "VC admission: $VC_ADMISSION"
+          case "$VC_VERDICT" in
+            VERIFIED|UNVERIFIABLE|BLOCKED) ;;
+            *) echo "Invalid VC verdict: $VC_VERDICT" >&2; exit 1 ;;
+          esac
+          case "$VC_ADMISSION" in
+            ADMIT|DENY) ;;
+            *) echo "Invalid VC admission: $VC_ADMISSION" >&2; exit 1 ;;
+          esac
+          if [ "$VC_VERDICT" = "UNVERIFIABLE" ] || [ "$VC_VERDICT" = "BLOCKED" ]; then
+            [ "$VC_ADMISSION" = "DENY" ] || { echo "Fail-closed violation: $VC_VERDICT must have admission=DENY" >&2; exit 1; }
+          fi
+          if [ "$VC_VERDICT" = "VERIFIED" ]; then
+            [ -n "$VC_PROOF_REF" ] || { echo "VERIFIED must have proof_ref" >&2; exit 1; }
+            if [[ ! "$VC_PROOF_REF" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "Invalid proof_ref format: $VC_PROOF_REF" >&2; exit 1
+            fi
+          else
+            [ -z "$VC_PROOF_REF" ] || { echo "$VC_VERDICT must have an empty proof_ref" >&2; exit 1; }
+          fi
+          EXPECTED_VERIFIED="false"
+          if [ "$VC_VERDICT" = "VERIFIED" ] && [ "$VC_ADMISSION" = "ADMIT" ]; then
+            EXPECTED_VERIFIED="true"
+          fi
+          [ "$VERIFIED" = "$EXPECTED_VERIFIED" ] || { echo "Consistency violation: verified=$VERIFIED but expected $EXPECTED_VERIFIED for verdict=$VC_VERDICT admission=$VC_ADMISSION" >&2; exit 1; }
+          [ -n "$VERDICT" ] || { echo "Missing scalar verdict when VC is present" >&2; exit 1; }
+          [ -n "$ADMISSION" ] || { echo "Missing scalar admission when VC is present" >&2; exit 1; }
+          [ "$VERDICT" = "$VC_VERDICT" ] || { echo "Scalar verdict ($VERDICT) != VC verdict ($VC_VERDICT)" >&2; exit 1; }
+          [ "$ADMISSION" = "$VC_ADMISSION" ] || { echo "Scalar admission ($ADMISSION) != VC admission ($VC_ADMISSION)" >&2; exit 1; }
+          [ "$PROOF_REF" = "$VC_PROOF_REF" ] || { echo "Scalar proof_ref ($PROOF_REF) != VC proof_ref ($VC_PROOF_REF)" >&2; exit 1; }
+          echo "VC v1.0 contract validated — all checks passed"
