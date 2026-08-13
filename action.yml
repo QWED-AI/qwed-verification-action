@@ -87,7 +87,7 @@ outputs:
 
 runs:
   using: 'docker'
-  image: 'docker://qwedai/qwed-verification:latest'
+  image: 'docker://qwedai/qwed-verification@sha256:be5d26f1ddfb5cba809bad51c629d4c4ed4f4ef0aa2a9b8bd78063ec2e0afdab'
   env:
     INPUT_API_KEY: ${{ inputs.api_key }}
     INPUT_API_URL: ${{ inputs.api_url }}

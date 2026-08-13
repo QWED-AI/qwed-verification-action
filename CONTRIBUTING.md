@@ -23,7 +23,7 @@ Test locally with Docker (the same image the action runs):
 ```bash
 docker run --rm -e INPUT_ACTION=scan-secrets -e INPUT_PATHS="**/*.env" \
   -v "$PWD:/github/workspace" -w /github/workspace \
-  qwedai/qwed-verification:latest
+  qwedai/qwed-verification:3.2.0
 ```
 
 ## Release Process
