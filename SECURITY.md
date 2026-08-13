@@ -22,7 +22,7 @@ Please include:
 
 ## Scope
 
-This action is a thin wrapper over the QWED core image (`docker://qwedai/qwed-verification:latest`). Vulnerabilities in the underlying engines and guards belong to the core repository:
+This action is a thin wrapper over the QWED core image (`docker://qwedai/qwed-verification:3.2.0`). Vulnerabilities in the underlying engines and guards belong to the core repository:
 
 https://github.com/QWED-AI/qwed-verification/security
 
