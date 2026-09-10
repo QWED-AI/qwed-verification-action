@@ -19,34 +19,59 @@ jobs:
       - name: Validate action metadata
         run: |
           python - <<'EOF'
+          import re
           import sys
           import yaml
 
+          failures = []
+
+          def check(cond, message):
+              # Explicit checks (not assert): the QWED assert-validation
+              # rule flags bare assert as a sole validation boundary, and
+              # explicit failures carry clearer CI messages anyway.
+              if not cond:
+                  failures.append(message)
+
           with open("action.yml", encoding="utf-8") as f:
               action = yaml.safe_load(f)
-          assert isinstance(action, dict), "action.yml must parse to a mapping"
+          check(isinstance(action, dict), "action.yml must parse to a mapping")
 
           for key in ("name", "description", "author", "branding", "inputs", "outputs", "runs"):
-              assert key in action, f"action.yml missing required key: {key}"
+              check(key in action, f"action.yml missing required key: {key}")
 
-          for name in (
-              "action", "engine", "query", "llm_output", "paths",
-              "output_format", "fail_on_findings", "api_key", "api_url",
-              "provider", "model", "mask_pii", "milestones",
-          ):
-              assert name in action["inputs"], f"action.yml missing input: {name}"
+          inputs = action.get("inputs", {})
+          check(isinstance(inputs, dict), "action.yml inputs must be a mapping")
+          if isinstance(inputs, dict):
+              for name in (
+                  "action", "engine", "query", "llm_output", "paths",
+                  "output_format", "fail_on_findings", "api_key", "api_url",
+                  "provider", "model", "mask_pii", "milestones",
+              ):
+                  check(name in inputs, f"action.yml missing input: {name}")
 
-          for name in (
-              "verified", "verdict", "admission", "proof_ref",
-              "verification_context", "explanation", "findings_count",
-              "badge_url", "sarif_file",
-          ):
-              assert name in action["outputs"], f"action.yml missing output: {name}"
+          outputs = action.get("outputs", {})
+          check(isinstance(outputs, dict), "action.yml outputs must be a mapping")
+          if isinstance(outputs, dict):
+              for name in (
+                  "verified", "verdict", "admission", "proof_ref",
+                  "verification_context", "explanation", "findings_count",
+                  "badge_url", "sarif_file",
+              ):
+                  check(name in outputs, f"action.yml missing output: {name}")
 
-          runs = action["runs"]
-          assert runs.get("using") == "docker", "action must run on docker"
+          runs = action.get("runs", {})
+          check(runs.get("using") == "docker", "action must run on docker")
           image = runs.get("image", "")
-          assert image and ":latest" not in image, f"image must be pinned, got: {image!r}"
+          check(
+              bool(re.fullmatch(r"docker://[^@]+@sha256:[0-9a-f]{64}", image or "")),
+              f"image must use an immutable digest, got: {image!r}",
+          )
+
+          if failures:
+              print("action.yml contract FAILED:")
+              for failure in failures:
+                  print(f"  - {failure}")
+              sys.exit(1)
           print("action.yml contract OK")
           EOF
 
@@ -76,11 +101,25 @@ jobs:
             true|false) echo "verified: $VERIFIED" ;;
             *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
           esac
-          [ -n "$EXPLANATION" ] || { echo "FAIL: explanation output empty" >&2; exit 1; }
+          # Explanation is guaranteed non-empty only on success paths: the
+          # engine emits no explanation for UNVERIFIABLE/BLOCKED outcomes,
+          # so requiring it unconditionally fails legitimate runs.
+          if [ "$VERIFIED" = "true" ] && [ -z "$EXPLANATION" ]; then
+            echo "FAIL: explanation output empty on verified=true" >&2; exit 1
+          fi
           case "$FINDINGS_COUNT" in
             ''|*[!0-9]*) echo "FAIL: findings_count not a number: '$FINDINGS_COUNT'" >&2; exit 1 ;;
             *) echo "findings_count: $FINDINGS_COUNT" ;;
           esac
+          if [ -n "$VERDICT" ]; then
+            echo "verdict: $VERDICT"
+            case "$VERDICT" in
+              VERIFIED|UNVERIFIABLE|BLOCKED) ;;
+              *) echo "Invalid verdict: $VERDICT" >&2; exit 1 ;;
+            esac
+          elif [ "$VERIFIED" = "true" ]; then
+            echo "FAIL: verified=true with empty verdict" >&2; exit 1
+          fi
           if [ -n "$VERDICT" ]; then
             echo "verdict: $VERDICT"
             case "$VERDICT" in
@@ -247,6 +286,7 @@ jobs:
           action: verify-process
           query: "Derivative of x^2"
           llm_output: "The derivative of x^2 is 2x."
+          milestones: "answer,reasoning"
           fail_on_findings: "false"
       - name: Verify outputs shape contract
         env:
@@ -259,19 +299,21 @@ jobs:
             true|false) echo "verified: $VERIFIED" ;;
             *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
           esac
-          if [ -n "$VERDICT" ]; then
-            case "$VERDICT" in
-              VERIFIED|UNVERIFIABLE|BLOCKED) echo "verdict: $VERDICT" ;;
-              *) echo "Invalid verdict: $VERDICT" >&2; exit 1 ;;
-            esac
+          # VERDICT/ADMISSION are mandatory outputs: an empty value is a
+          # missing-output regression, not a verdict.
+          [ -n "$VERDICT" ] || { echo "FAIL: verdict output empty" >&2; exit 1; }
+          case "$VERDICT" in
+            VERIFIED|UNVERIFIABLE|BLOCKED) echo "verdict: $VERDICT" ;;
+            *) echo "Invalid verdict: $VERDICT" >&2; exit 1 ;;
+          esac
+          [ -n "$ADMISSION" ] || { echo "FAIL: admission output empty" >&2; exit 1; }
+          case "$ADMISSION" in
+            ADMIT|DENY) echo "admission: $ADMISSION" ;;
+            *) echo "Invalid admission: $ADMISSION" >&2; exit 1 ;;
+          esac
+          if [ "$VERIFIED" = "true" ] && [ -z "$EXPLANATION" ]; then
+            echo "FAIL: explanation output empty on verified=true" >&2; exit 1
           fi
-          if [ -n "$ADMISSION" ]; then
-            case "$ADMISSION" in
-              ADMIT|DENY) echo "admission: $ADMISSION" ;;
-              *) echo "Invalid admission: $ADMISSION" >&2; exit 1 ;;
-            esac
-          fi
-          [ -n "$EXPLANATION" ] || { echo "FAIL: explanation output empty" >&2; exit 1; }
 
   test-sarif:
     name: sarif output
