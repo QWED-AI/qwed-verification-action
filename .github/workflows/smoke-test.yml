@@ -9,6 +9,47 @@ permissions:
   contents: read
 
 jobs:
+  validate-action:
+    name: action.yml contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate action metadata
+        run: |
+          python - <<'EOF'
+          import sys
+          import yaml
+
+          with open("action.yml", encoding="utf-8") as f:
+              action = yaml.safe_load(f)
+          assert isinstance(action, dict), "action.yml must parse to a mapping"
+
+          for key in ("name", "description", "author", "branding", "inputs", "outputs", "runs"):
+              assert key in action, f"action.yml missing required key: {key}"
+
+          for name in (
+              "action", "engine", "query", "llm_output", "paths",
+              "output_format", "fail_on_findings", "api_key", "api_url",
+              "provider", "model", "mask_pii", "milestones",
+          ):
+              assert name in action["inputs"], f"action.yml missing input: {name}"
+
+          for name in (
+              "verified", "verdict", "admission", "proof_ref",
+              "verification_context", "explanation", "findings_count",
+              "badge_url", "sarif_file",
+          ):
+              assert name in action["outputs"], f"action.yml missing output: {name}"
+
+          runs = action["runs"]
+          assert runs.get("using") == "docker", "action must run on docker"
+          image = runs.get("image", "")
+          assert image and ":latest" not in image, f"image must be pinned, got: {image!r}"
+          print("action.yml contract OK")
+          EOF
+
   test-secrets:
     name: scan-secrets
     runs-on: ubuntu-latest
@@ -28,10 +69,17 @@ jobs:
           VERIFIED: ${{ steps.scan.outputs.verified }}
           VERDICT: ${{ steps.scan.outputs.verdict }}
           ADMISSION: ${{ steps.scan.outputs.admission }}
+          EXPLANATION: ${{ steps.scan.outputs.explanation }}
+          FINDINGS_COUNT: ${{ steps.scan.outputs.findings_count }}
         run: |
           case "$VERIFIED" in
             true|false) echo "verified: $VERIFIED" ;;
             *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
+          [ -n "$EXPLANATION" ] || { echo "FAIL: explanation output empty" >&2; exit 1; }
+          case "$FINDINGS_COUNT" in
+            ''|*[!0-9]*) echo "FAIL: findings_count not a number: '$FINDINGS_COUNT'" >&2; exit 1 ;;
+            *) echo "findings_count: $FINDINGS_COUNT" ;;
           esac
           if [ -n "$VERDICT" ]; then
             echo "verdict: $VERDICT"
@@ -184,3 +232,70 @@ jobs:
           [ "$ADMISSION" = "$VC_ADMISSION" ] || { echo "Scalar admission ($ADMISSION) != VC admission ($VC_ADMISSION)" >&2; exit 1; }
           [ "$PROOF_REF" = "$VC_PROOF_REF" ] || { echo "Scalar proof_ref ($PROOF_REF) != VC proof_ref ($VC_PROOF_REF)" >&2; exit 1; }
           echo "VC v1.0 contract validated — all checks passed"
+
+  test-verify-process:
+    name: verify-process
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run QWED verify-process
+        id: verify
+        uses: ./
+        with:
+          action: verify-process
+          query: "Derivative of x^2"
+          llm_output: "The derivative of x^2 is 2x."
+          fail_on_findings: "false"
+      - name: Verify outputs shape contract
+        env:
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+          VERDICT: ${{ steps.verify.outputs.verdict }}
+          ADMISSION: ${{ steps.verify.outputs.admission }}
+          EXPLANATION: ${{ steps.verify.outputs.explanation }}
+        run: |
+          case "$VERIFIED" in
+            true|false) echo "verified: $VERIFIED" ;;
+            *) echo "Invalid or missing verified output: '$VERIFIED'" >&2; exit 1 ;;
+          esac
+          if [ -n "$VERDICT" ]; then
+            case "$VERDICT" in
+              VERIFIED|UNVERIFIABLE|BLOCKED) echo "verdict: $VERDICT" ;;
+              *) echo "Invalid verdict: $VERDICT" >&2; exit 1 ;;
+            esac
+          fi
+          if [ -n "$ADMISSION" ]; then
+            case "$ADMISSION" in
+              ADMIT|DENY) echo "admission: $ADMISSION" ;;
+              *) echo "Invalid admission: $ADMISSION" >&2; exit 1 ;;
+            esac
+          fi
+          [ -n "$EXPLANATION" ] || { echo "FAIL: explanation output empty" >&2; exit 1; }
+
+  test-sarif:
+    name: sarif output
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run QWED scan with SARIF output
+        id: scan
+        uses: ./
+        with:
+          action: scan-secrets
+          paths: "action.yml"
+          output_format: sarif
+          fail_on_findings: "false"
+      - name: Verify SARIF document
+        env:
+          SARIF_FILE: ${{ steps.scan.outputs.sarif_file }}
+        run: |
+          [ -n "$SARIF_FILE" ] || { echo "FAIL: sarif_file output empty" >&2; exit 1; }
+          if [ -f "$SARIF_FILE" ]; then
+            SARIF_DOC=$(cat "$SARIF_FILE")
+          else
+            SARIF_DOC="$SARIF_FILE"
+          fi
+          printf '%s' "$SARIF_DOC" | python -c "import json,sys; d=json.load(sys.stdin); assert d.get('version','').startswith('2.1'), 'bad sarif version'; assert isinstance(d.get('runs'), list), 'sarif runs not a list'; print('SARIF well-formed')"
