@@ -213,10 +213,25 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 
 ```yaml
 - uses: QWED-AI/qwed-verification-action@v1      # tracks latest v1
-- uses: QWED-AI/qwed-verification-action@v1.2.0  # pinned, reproducible
+- uses: QWED-AI/qwed-verification-action@v1.0.0  # pinned, reproducible
 ```
 
-The action's version tags are decoupled from the core protocol's release train — action fixes ship on their own cadence. The Docker image tracks the latest published QWED release; pin the action ref (`@v1.2.0`) for reproducible workflow runs.
+The action's version tags are decoupled from the engine's release train — action fixes ship on their own cadence. `v1` is a floating alias: the release workflow moves it to every new `v1.x.y`, so it always resolves to the latest action release (and whatever engine that release pins). For a fixed build, pin the full version.
+
+| Action | Engine image |
+|---|---|
+| `v1` (alias) | Tracks latest `v1.x.y` — see rows below |
+| `v1.0.0` | `:latest` (unpinned — resolves to the current latest engine) |
+
+`main` already carries a digest pin (`sha256:be5d26f1…`, engine `3.2.0`); it ships as `v1.0.1`, which will get its own row here.
+
+### Engine bump policy
+
+- When the engine releases a new version, the action is consciously bumped to reference it (new action minor version, pin updated, matrix row added below).
+- Patch action releases (`1.x.y`) never change the engine pin.
+- Minor engine releases that change verification behavior require an action minor bump (`1.x`).
+- The matrix above lists published tags only and is updated in the same PR as every pin change — a pin without a matrix row fails review.
+- Verify any row: the full digest is in `action.yml` under `runs.image`; Docker Hub tags map it to the engine release.
 
 ---
 
