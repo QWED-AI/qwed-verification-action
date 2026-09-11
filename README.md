@@ -213,10 +213,21 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 
 ```yaml
 - uses: QWED-AI/qwed-verification-action@v1      # tracks latest v1
-- uses: QWED-AI/qwed-verification-action@v1.2.0  # pinned, reproducible
+- uses: QWED-AI/qwed-verification-action@v1.0.0  # pinned, reproducible
 ```
 
-The action's version tags are decoupled from the core protocol's release train — action fixes ship on their own cadence. The Docker image tracks the latest published QWED release; pin the action ref (`@v1.2.0`) for reproducible workflow runs.
+The action's version tags are decoupled from the engine's release train — action fixes ship on their own cadence. The engine image is pinned by digest (never `:latest`), so each action version resolves to exactly one engine build:
+
+| Action | Engine image |
+|---|---|
+| `v1`, `v1.0.0` | `3.2.0` (`sha256:be5d26f1…afdab`) |
+
+### Engine bump policy
+
+- When the engine releases a new version, the action is consciously bumped to reference it (new action minor version, pin updated, matrix row added below).
+- Patch action releases (`1.0.x`) never change the engine pin.
+- Minor engine releases that change verification behavior require an action minor bump (`1.x`).
+- The matrix above is updated in the same PR as every pin change — a pin without a matrix row fails review.
 
 ---
 
