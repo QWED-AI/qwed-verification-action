@@ -57,7 +57,7 @@ jobs:
               for name in (
                   "verified", "verdict", "admission", "proof_ref",
                   "verification_context", "explanation", "findings_count",
-                  "badge_url", "sarif_file",
+                  "process_rate", "badge_url", "sarif_file",
               ):
                   check(name in outputs, f"action.yml missing output: {name}")
 

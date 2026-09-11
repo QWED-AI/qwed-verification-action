@@ -127,10 +127,10 @@ Result: REJECTED — the integral of x² is x³/3 + C, proven by SymPy, cited in
     action: verify-process
     query: "Derivative of x^2"
     llm_output: "Issue: differentiate x^2. Rule: power rule. Application: 2*x^(2-1). Conclusion: 2x."
-    milestones: "answer,reasoning"
+    milestones: "issue,rule,application,conclusion"
     fail_on_findings: "true"
 ```
-`verify-process` checks *how* the model reasoned, not just what it concluded. Every trace must satisfy the IRAC structure (Issue, Rule, Application, Conclusion) and contain each comma-separated entry in `milestones` (matched case-insensitively). Missing IRAC steps or missed milestones deny the verdict and are reported by name, with a decimal `process_rate` scoring what fraction of milestones held. Omitting `milestones` checks IRAC structure only.
+`verify-process` checks *how* the model reasoned, not just what it concluded. Every trace must satisfy the IRAC structure (Issue, Rule, Application, Conclusion) and contain each comma-separated entry in `milestones` (matched case-insensitively). Missing IRAC steps or missed milestones deny admission (`admission: DENY`) and are reported by name, with a decimal `process_rate` scoring what fraction of milestones held. Omitting `milestones` checks IRAC structure only.
 
 **Verification Context output** (emit VC v1.0 JSON)
 ```yaml
@@ -196,6 +196,7 @@ Every QWED verification result is emitted as a [Verification Context v1.0](https
 | `verified` | `true` if `verdict=VERIFIED` and `admission=ADMIT` (backward-compatible) |
 | `explanation` | The proof, or the reason it didn't hold |
 | `findings_count` | Number of issues found |
+| `process_rate` | Fraction of required milestones present, 0.0–1.0 (`verify-process` mode) |
 | `sarif_file` | Path to the SARIF report |
 | `badge_url` | URL for your QWED verified badge |
 
