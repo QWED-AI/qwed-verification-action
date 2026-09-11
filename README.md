@@ -202,7 +202,8 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 
 ## Security & Privacy
 
-- **Nothing leaves the runner.** Code and secrets are evaluated inside your CI environment or VPC — no external call, no exception. (`verify` mode is the only mode that calls the QWED API; use `api_url` for self-hosted backends.)
+- **Scan modes stay on the runner.** `scan-secrets`, `scan-code`, `verify-shell`, and `verify-process` execute entirely inside your CI environment or VPC — no external call, no exception.
+- **Verify mode calls a backend.** `verify` (LLM output cross-examination) calls the configured QWED API unless you point `api_url` at a self-hosted or local deployment — so only the query and output under examination traverse that boundary, and only to the backend you chose.
 - **Nothing is learned from.** QWED is a deterministic execution engine, not a model. There is no training loop for your data to enter.
 - **Every passing result includes an evidence commitment.** A passing result ships with `verdict=VERIFIED`, `admission=ADMIT`, and a `proof_ref` binding the ruling to the evidence that produced it.
 - **SARIF native.** Findings land directly in the GitHub Security tab — no separate dashboard to check.
