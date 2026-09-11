@@ -8,6 +8,17 @@ Most good PRs start as a failed attempt to fool the verifier.
 - **Improve the wrapper** — input handling, output format, SARIF quality, documentation.
 - **New engine ideas** — these belong in the [core repo](https://github.com/QWED-AI/qwed-verification), not here.
 
+## Where to file a bug
+
+This repo is a thin wrapper: it declares the action contract (`action.yml`) and invokes the published QWED engine image. It does not verify anything itself — the thinner the wrapper, the better. File the bug where the fault lives:
+
+| Bug type | File it in |
+|---|---|
+| Engine bugs — logic bypass, injection/RCE in scanned content, verification correctness, missed findings | [QWED-AI/qwed-verification](https://github.com/QWED-AI/qwed-verification) (see its [CONTRIBUTING](https://github.com/QWED-AI/qwed-verification/blob/main/CONTRIBUTING.md) and [SECURITY](https://github.com/QWED-AI/qwed-verification/blob/main/SECURITY.md)) |
+| Wrapper bugs — input/env handling, output leakage or malformation, SARIF quality, `action.yml` schema, CI smoke failures | This repo ([QWED-AI/qwed-verification-action](https://github.com/QWED-AI/qwed-verification-action/issues)) |
+
+Unsure? File here — a wrapper triage moves engine bugs upstream with the reproduction attached. Security-sensitive findings follow [SECURITY.md](SECURITY.md) in either repo; never open a public issue for a live bypass.
+
 ## Development
 
 This repo is intentionally thin. It declares the action contract (`action.yml`) and wraps the published QWED core image. There is no build step.
