@@ -80,6 +80,8 @@ outputs:
     description: 'The proof, or the reason it did not hold'
   findings_count:
     description: 'Number of issues found'
+  process_rate:
+    description: 'Fraction of required milestones present, 0.0-1.0 (verify-process mode)'
   badge_url:
     description: 'URL for the QWED verified badge'
   sarif_file:

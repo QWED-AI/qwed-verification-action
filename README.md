@@ -7,6 +7,7 @@
   <p><i>Every pull request makes a claim. This cross-examines it.</i></p>
 
   [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Available-1a1a1a?style=flat)](https://github.com/marketplace/actions/qwed-protocol-verification)
+  [![GitHub Technology Partner](https://img.shields.io/badge/GitHub-Technology_Partner-0969da?style=flat&logo=github&logoColor=white)](https://github.com/marketplace/actions/qwed-protocol-verification)
   [![Verified Publisher](https://img.shields.io/badge/Verified_Publisher-QWED-2ea44f?style=flat&logo=github&logoColor=white)](https://github.com/marketplace/actions/qwed-protocol-verification)
   [![Core Protocol](https://img.shields.io/badge/Core-QWED_Protocol-1a1a1a?style=flat)](https://github.com/QWED-AI/qwed-verification)
   [![License](https://img.shields.io/badge/License-Apache_2.0-1a1a1a?style=flat)](LICENSE)
@@ -63,7 +64,7 @@ QWED doesn't try to make the model smarter. It makes the model **accountable** �
 
 ## What It Verifies
 
-One action, four jurisdictions:
+One action, five jurisdictions:
 
 | Mode | Catches | Why It's on Trial |
 |---|---|---|
@@ -71,6 +72,7 @@ One action, four jurisdictions:
 | `scan-code` | `eval()`, `exec()`, `subprocess`, unsafe imports | The RCE that was one merge away |
 | `verify-shell` | `curl \| bash`, `rm -rf`, sudo escapes | The script that owns the box it runs on |
 | `verify` | Hallucinated math, logic, SQL, code | Output that reads correctly and isn't |
+| `verify-process` | Skipped reasoning steps, missing IRAC structure | The chain-of-thought that jumped straight to the answer |
 
 A linter tells you your code doesn't match the style guide. QWED tells you your code doesn't match reality — using **SymPy**, **Z3**, and **SQLGlot**, the same class of engine used to prove theorems, not to guess at them.
 
@@ -117,6 +119,18 @@ A linter tells you your code doesn't match the style guide. QWED tells you your 
 ```
 Result: REJECTED — the integral of x² is x³/3 + C, proven by SymPy, cited in the ruling.
 ```
+
+**Reasoning process verification** (IRAC structure + milestones)
+```yaml
+- uses: QWED-AI/qwed-verification-action@v1
+  with:
+    action: verify-process
+    query: "Derivative of x^2"
+    llm_output: "Issue: differentiate x^2. Rule: power rule. Application: 2*x^(2-1). Conclusion: 2x."
+    milestones: "issue,rule,application,conclusion"
+    fail_on_findings: "true"
+```
+`verify-process` checks *how* the model reasoned, not just what it concluded. Every trace must satisfy the IRAC structure (Issue, Rule, Application, Conclusion) and contain each comma-separated entry in `milestones` (matched case-insensitively). Missing IRAC steps or missed milestones deny admission (`admission: DENY`) and are reported by name, with a decimal `process_rate` scoring what fraction of milestones held. Omitting `milestones` checks IRAC structure only.
 
 **Verification Context output** (emit VC v1.0 JSON)
 ```yaml
@@ -169,6 +183,7 @@ Every QWED verification result is emitted as a [Verification Context v1.0](https
 | `api_key` | — | Optional — local mode requires nothing |
 | `api_url` | `https://api.qwedai.com` | QWED API base URL for self-hosted deployments |
 | `mask_pii` | `false` | Redact PII in inputs and outputs |
+| `milestones` | — | Comma-separated required process steps for `verify-process` (matched case-insensitively; missed ones deny and are named) |
 
 **Outputs**
 
@@ -181,6 +196,7 @@ Every QWED verification result is emitted as a [Verification Context v1.0](https
 | `verified` | `true` if `verdict=VERIFIED` and `admission=ADMIT` (backward-compatible) |
 | `explanation` | The proof, or the reason it didn't hold |
 | `findings_count` | Number of issues found |
+| `process_rate` | Fraction of required milestones present, 0.0–1.0 (`verify-process` mode) |
 | `sarif_file` | Path to the SARIF report |
 | `badge_url` | URL for your QWED verified badge |
 

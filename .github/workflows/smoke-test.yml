@@ -57,7 +57,7 @@ jobs:
               for name in (
                   "verified", "verdict", "admission", "proof_ref",
                   "verification_context", "explanation", "findings_count",
-                  "badge_url", "sarif_file",
+                  "process_rate", "badge_url", "sarif_file",
               ):
                   check(name in outputs, f"action.yml missing output: {name}")
 
@@ -299,6 +299,7 @@ jobs:
           VERDICT: ${{ steps.verify.outputs.verdict }}
           ADMISSION: ${{ steps.verify.outputs.admission }}
           EXPLANATION: ${{ steps.verify.outputs.explanation }}
+          PROCESS_RATE: ${{ steps.verify.outputs.process_rate }}
         run: |
           case "$VERIFIED" in
             true|false) echo "verified: $VERIFIED" ;;
@@ -330,6 +331,23 @@ jobs:
           if [ "$VERIFIED" = "true" ] && [ -z "$EXPLANATION" ]; then
             echo "FAIL: explanation output empty on verified=true" >&2; exit 1
           fi
+          # process_rate must be a finite fraction on every run, denied or
+          # not: the engine always scores what it checked.
+          python - <<'EOF'
+          import math
+          import os
+          import sys
+
+          try:
+              rate = float(os.environ.get("PROCESS_RATE", ""))
+          except (TypeError, ValueError):
+              print("FAIL: process_rate missing or not a number", file=sys.stderr)
+              sys.exit(1)
+          if not math.isfinite(rate) or not 0.0 <= rate <= 1.0:
+              print(f"FAIL: process_rate out of range: {rate!r}", file=sys.stderr)
+              sys.exit(1)
+          print(f"process_rate: {rate}")
+          EOF
 
   test-sarif:
     name: sarif output
