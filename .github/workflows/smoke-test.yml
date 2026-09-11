@@ -35,6 +35,8 @@ jobs:
           with open("action.yml", encoding="utf-8") as f:
               action = yaml.safe_load(f)
           check(isinstance(action, dict), "action.yml must parse to a mapping")
+          if not isinstance(action, dict):
+              action = {}
 
           for key in ("name", "description", "author", "branding", "inputs", "outputs", "runs"):
               check(key in action, f"action.yml missing required key: {key}")
@@ -60,6 +62,9 @@ jobs:
                   check(name in outputs, f"action.yml missing output: {name}")
 
           runs = action.get("runs", {})
+          check(isinstance(runs, dict), "action.yml runs must be a mapping")
+          if not isinstance(runs, dict):
+              runs = {}
           check(runs.get("using") == "docker", "action must run on docker")
           image = runs.get("image", "")
           check(
@@ -311,6 +316,17 @@ jobs:
             ADMIT|DENY) echo "admission: $ADMISSION" ;;
             *) echo "Invalid admission: $ADMISSION" >&2; exit 1 ;;
           esac
+          # Cross-field fail-closed consistency, mirroring test-secrets.
+          if [ "$VERDICT" = "UNVERIFIABLE" ] || [ "$VERDICT" = "BLOCKED" ]; then
+            [ "$ADMISSION" = "DENY" ] || { echo "Fail-closed violation: $VERDICT must produce DENY" >&2; exit 1; }
+          fi
+          if [ "$VERDICT" = "VERIFIED" ] && [ "$ADMISSION" = "ADMIT" ]; then
+            [ "$VERIFIED" = "true" ] || { echo "Consistency violation: VERIFIED+ADMIT must have verified=true" >&2; exit 1; }
+          fi
+          if [ "$VERIFIED" = "true" ]; then
+            [ "$VERDICT" = "VERIFIED" ] || { echo "Consistency violation: verified=true requires verdict=VERIFIED" >&2; exit 1; }
+            [ "$ADMISSION" = "ADMIT" ] || { echo "Consistency violation: verified=true requires admission=ADMIT" >&2; exit 1; }
+          fi
           if [ "$VERIFIED" = "true" ] && [ -z "$EXPLANATION" ]; then
             echo "FAIL: explanation output empty on verified=true" >&2; exit 1
           fi
