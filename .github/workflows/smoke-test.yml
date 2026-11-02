@@ -60,20 +60,18 @@ jobs:
                   f"api_url must default to http://localhost:8000, got: {default!r}",
               )
 
-          # No file in the checkout may name the retired domain (#16). It is
-          # built from parts so that this check does not match itself.
+          # No file in the checkout may name the retired domain (#16), in any
+          # case and in any file, binary ones included: the bytes are searched.
+          # The name is built from parts so that this check does not match itself.
           import os
           retired = "qwedai" + ".com"
           for root, dirs, files in os.walk("."):
               dirs[:] = [d for d in dirs if d != ".git"]
               for name in files:
                   path = os.path.join(root, name)
-                  try:
-                      with open(path, encoding="utf-8") as f:
-                          text = f.read()
-                  except UnicodeDecodeError:
-                      continue
-                  check(retired not in text, f"{path} names the retired domain {retired}")
+                  with open(path, "rb") as f:
+                      data = f.read().lower()
+                  check(retired.encode() not in data, f"{path} names the retired domain {retired}")
 
           outputs = action.get("outputs", {})
           check(isinstance(outputs, dict), "action.yml outputs must be a mapping")
