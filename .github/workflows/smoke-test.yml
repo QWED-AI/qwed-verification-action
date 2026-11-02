@@ -51,8 +51,8 @@ jobs:
               ):
                   check(name in inputs, f"action.yml missing input: {name}")
               # The default API must be one the user runs: a hosted default
-              # sends api_key to whoever owns that domain, and qwedai.com
-              # lapses on 9 December 2026 (#16).
+              # sends api_key to whoever owns that domain, and QWED's old
+              # domain lapses on 9 December 2026 (#16).
               api_url = inputs.get("api_url")
               default = api_url.get("default") if isinstance(api_url, dict) else None
               check(
@@ -60,8 +60,20 @@ jobs:
                   f"api_url must default to http://localhost:8000, got: {default!r}",
               )
 
-          with open("action.yml", encoding="utf-8") as f:
-              check("qwedai.com" not in f.read(), "action.yml must not name qwedai.com")
+          # No tracked file may name the retired domain (#16). It is built
+          # from parts so that this check does not match itself.
+          import subprocess
+          retired = "qwedai" + ".com"
+          tracked = subprocess.run(
+              ["git", "ls-files"], capture_output=True, text=True, check=True
+          ).stdout.split()
+          for path in tracked:
+              try:
+                  with open(path, encoding="utf-8") as f:
+                      text = f.read()
+              except UnicodeDecodeError:
+                  continue
+              check(retired not in text, f"{path} names the retired domain {retired}")
 
           outputs = action.get("outputs", {})
           check(isinstance(outputs, dict), "action.yml outputs must be a mapping")
