@@ -50,6 +50,18 @@ jobs:
                   "provider", "model", "mask_pii", "milestones",
               ):
                   check(name in inputs, f"action.yml missing input: {name}")
+              # The default API must be one the user runs: a hosted default
+              # sends api_key to whoever owns that domain, and qwedai.com
+              # lapses on 9 December 2026 (#16).
+              api_url = inputs.get("api_url")
+              default = api_url.get("default") if isinstance(api_url, dict) else None
+              check(
+                  default == "http://localhost:8000",
+                  f"api_url must default to http://localhost:8000, got: {default!r}",
+              )
+
+          with open("action.yml", encoding="utf-8") as f:
+              check("qwedai.com" not in f.read(), "action.yml must not name qwedai.com")
 
           outputs = action.get("outputs", {})
           check(isinstance(outputs, dict), "action.yml outputs must be a mapping")
