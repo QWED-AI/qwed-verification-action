@@ -44,9 +44,9 @@ inputs:
     required: false
 
   api_url:
-    description: 'QWED API base URL for self-hosted deployments (default: https://api.qwedai.com)'
+    description: 'Base URL of your self-hosted QWED API for verify mode (default: http://localhost:8000). The pinned image does not read it yet and always calls http://localhost:8000; see QWED-AI/qwed-verification#567'
     required: false
-    default: 'https://api.qwedai.com'
+    default: 'http://localhost:8000'
 
   provider:
     description: 'LLM provider (e.g. openai, anthropic)'

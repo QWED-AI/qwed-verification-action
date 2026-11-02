@@ -4,7 +4,7 @@
 
 The QWED team takes security seriously. This action is a security product — a bypass is a product bug.
 
-**Do not open a public issue for a security vulnerability.** Report privately to **rahul@qwedai.com** or via GitHub's private vulnerability reporting:
+**Do not open a public issue for a security vulnerability.** Report privately to **rahul@qwedai.tech** or via GitHub's private vulnerability reporting:
 
 https://github.com/QWED-AI/qwed-verification-action/security/advisories
 

@@ -56,7 +56,7 @@ From this commit forward, nothing merges to `main` on the strength of its own te
 
 Ask a model to calculate compound interest on $100,000 at 5% over ten years, and a fluent, confident, wrong answer comes back — simple interest, dressed as compound. Nothing in the tone gives it away. That's the actual failure mode: **fluency and correctness are different claims**, and only one of them is checkable.
 
-In our benchmarks, a frontier model held **73% accuracy** on financial calculations — number-moving tasks, run through a solver instead of trusted on delivery. QWED caught the remaining errors before they reached anywhere that mattered. On unverified financial output, that gap has priced out as high as **$12,889 per transaction**.
+QWED recomputes the claim with a solver instead of trusting it on delivery, and admits it only when the result holds. What it does not verify is listed at [qwedai.tech/limits](https://qwedai.tech/limits).
 
 QWED doesn't try to make the model smarter. It makes the model **accountable** — every claim gets handed to something that can't guess.
 
@@ -143,7 +143,7 @@ Result: REJECTED — the integral of x² is x³/3 + C, proven by SymPy, cited in
   # outputs: verdict, admission, proof_ref, verification_context
 ```
 
-> **Note on `verify` mode:** secret scanning, code scanning, and shell verification run **entirely inside the runner** — no backend needed. The `verify` mode (LLM output cross-examination) calls the QWED verification API; pass an `api_key` (or run a QWED backend locally) for that mode. Self-hosted deployments can use the `api_url` input to point to their own backend.
+> **Note on `verify` mode:** secret scanning, code scanning, and shell verification run **entirely inside the runner** — no backend needed. The `verify` mode (LLM output cross-examination) calls a QWED API server that you run; there is no hosted QWED API. The pinned image does not read the `api_url` input yet and calls `http://localhost:8000` inside the action's own container, so `verify` mode cannot reach your server until [QWED-AI/qwed-verification#567](https://github.com/QWED-AI/qwed-verification/issues/567) is fixed. The scan modes are not affected.
 
 ---
 
@@ -155,11 +155,11 @@ Every QWED verification result is emitted as a [Verification Context v1.0](https
 |---|---|---|
 | `verdict` | `VERIFIED` · `UNVERIFIABLE` · `BLOCKED` | The truth judgment |
 | `admission` | `ADMIT` · `DENY` | Safe to merge? (truth ≠ admission) |
-| `proof_ref` | `sha256:<64-hex>` or empty | Cryptographic evidence commitment |
+| `proof_ref` | `sha256:<64-hex>` or empty | SHA-256 commitment over the evidence |
 | `verification_context` | JSON | Full VC v1.0 document (with `output_format: verification-context` or `json`) |
 | `verified` | `true` · `false` | Backward-compatible boolean (`true` only when `verdict=VERIFIED` and `admission=ADMIT`) |
 
-**Fail-closed guarantees:**
+**Fail-closed rules:**
 - `UNVERIFIABLE` and `BLOCKED` always produce `admission: DENY`
 - `VERIFIED` requires a resolvable `proof_ref`
 - Schema validation failure fails closed
@@ -181,7 +181,7 @@ Every QWED verification result is emitted as a [Verification Context v1.0](https
 | `output_format` | `text` | `text` · `json` · `sarif` · `verification-context` |
 | `fail_on_findings` | `true` | Fail the build on any finding (admission != ADMIT) |
 | `api_key` | — | Optional — local mode requires nothing |
-| `api_url` | `https://api.qwedai.com` | QWED API base URL for self-hosted deployments |
+| `api_url` | `http://localhost:8000` | Your self-hosted QWED API for `verify` mode (not read by the pinned image yet, see [#567](https://github.com/QWED-AI/qwed-verification/issues/567)) |
 | `mask_pii` | `false` | Redact PII in inputs and outputs |
 | `milestones` | — | Comma-separated required process steps for `verify-process` (matched case-insensitively; missed ones deny and are named) |
 
@@ -219,7 +219,7 @@ QWED isn't in competition with the models it checks. It's what lets you ship the
 ## Security & Privacy
 
 - **Scan modes stay on the runner.** `scan-secrets`, `scan-code`, `verify-shell`, and `verify-process` execute entirely inside your CI environment or VPC — no external call, no exception.
-- **Verify mode calls a backend.** `verify` (LLM output cross-examination) calls the configured QWED API unless you point `api_url` at a self-hosted or local deployment — so only the query and output under examination traverse that boundary, and only to the backend you chose.
+- **Verify mode calls a backend.** `verify` (LLM output cross-examination) calls only the QWED API server you run (see the note on `verify` mode above) — so only the query and output under examination traverse that boundary, and only to that server.
 - **Nothing is learned from.** QWED is a deterministic execution engine, not a model. There is no training loop for your data to enter.
 - **Every passing result includes an evidence commitment.** A passing result ships with `verdict=VERIFIED`, `admission=ADMIT`, and a `proof_ref` binding the ruling to the evidence that produced it.
 - **SARIF native.** Findings land directly in the GitHub Security tab — no separate dashboard to check.
@@ -260,8 +260,8 @@ This action runs on the open-source **[QWED Protocol](https://github.com/QWED-AI
 |---|---|
 | Core repository | [QWED-AI/qwed-verification](https://github.com/QWED-AI/qwed-verification) |
 | Verification Context spec | [spec/v1.0/verification-context.md](https://github.com/QWED-AI/qwed-verification/blob/main/spec/v1.0/verification-context.md) |
-| QWED Security (GitHub App) | [QWED-AI/qwed-security](https://github.com/QWED-AI/qwed-security) |
-| Documentation | [docs.qwedai.com](https://docs.qwedai.com) |
+| QWED Security (GitHub App) | [qwedai.tech/platform/security](https://qwedai.tech/platform/security) |
+| Documentation | [docs.qwedai.tech](https://docs.qwedai.tech) |
 | Verification course | [QWED-AI/qwed-learning](https://github.com/QWED-AI/qwed-learning) |
 | Sponsor | [github.com/sponsors/QWED-AI](https://github.com/sponsors/QWED-AI) |
 
@@ -278,7 +278,7 @@ Found a bypass, or have a new engine in mind? Read [CONTRIBUTING.md](CONTRIBUTIN
 <i>Where an argument ends, and a proof begins.</i>
 
 [GitHub](https://github.com/QWED-AI/qwed-verification) ·
-[Documentation](https://docs.qwedai.com) ·
+[Documentation](https://docs.qwedai.tech) ·
 [Marketplace](https://github.com/marketplace/actions/qwed-protocol-verification)
 
 </div>
