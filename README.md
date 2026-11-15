@@ -273,6 +273,12 @@ Found a bypass, or have a new engine in mind? Read [CONTRIBUTING.md](CONTRIBUTIN
 
 ---
 
+## Licence
+
+[Apache License 2.0](LICENSE). Redistributions keep the attribution in [NOTICE](NOTICE), and [TRADEMARKS.md](TRADEMARKS.md) says how the QWED name and logo may be used.
+
+---
+
 <div align="center">
 
 <i>Where an argument ends, and a proof begins.</i>
